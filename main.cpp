@@ -1,10 +1,13 @@
 ﻿#include "tgaimage.h"
 #include <iostream>
-#include <random>
+#include "Model.h"
 
+
+const int height = 800;
+const int width = 800;
 const TGAColor white = TGAColor(255, 255, 255, 255);
 const TGAColor red   = TGAColor(255, 0,   0,   255);
-
+Model *model = nullptr;
 
 void draw_line(int x1, int y1, int x2, int y2, TGAImage& image, const TGAColor& color) {
 	bool steep = false;
@@ -54,25 +57,29 @@ void draw_line(int x1, int y1, int x2, int y2, TGAImage& image, const TGAColor& 
 	}
 }
 
-void effciency_test(TGAImage &image) {
-	std::random_device rd;
-	std::mt19937 gen(rd());
-	std::uniform_int_distribution<> dis(0, 100);
-	for (int i = 0; i < 10000000; i++) {
-		int x1 = dis(gen);
-		int y1 = dis(gen);
-		int x2 = dis(gen);
-		int y2 = dis(gen);
-		//std::cout << "drawing (" << x1 << ", " << y1 << ") ->(" << x2 << ", " << y2 << ")" << std::endl;
-		draw_line(x1, y1, x2, y2, image, white);
-	}
-}
 
 
 int main(int argc, char** argv) {
-	TGAImage image(100, 100, TGAImage::RGB);
-	draw_line(77, 81, 74, 98, image, white);
-	effciency_test(image);
+	TGAImage image(width, height, TGAImage::RGB);
+	if (2 == argc) {
+		model = new Model(argv[1]);
+	}
+	else {
+		model = new Model("./obj/african_head.obj");
+	}
+
+	for (int i = 0; i < model->nfaces(); i++) {
+		std::vector<int> f = model->getFace(i);
+		for (int j = 0; j < 3; j++) {
+			Vec3f v0 = model->getVert(f[j]);
+			Vec3f v1 = model->getVert(f[(j + 1) % 3]);
+			int x0 = (v0.x + 1.) * width / 2.;
+			int y0 = (v0.y + 1.) * height / 2.;
+			int x1 = (v1.x + 1.) * width / 2.;
+			int y1 = (v1.y + 1.) * height / 2.;
+			draw_line(x0, y0, x1, y1, image, white);
+		}
+	}
 	image.flip_vertically();
 	image.write_tga_file("output.tga");
 	return 0;
