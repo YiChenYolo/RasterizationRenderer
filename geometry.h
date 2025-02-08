@@ -15,6 +15,7 @@ template<class t> struct Vec2 {
 	inline Vec2<t> operator +(const Vec2<t>& V) { return Vec2(u + V.u, v + V.v); }
 	inline Vec2<t> operator -(const Vec2<t>& V) { return Vec2(u - V.u, v - V.v); }
 	inline Vec2<t> operator *(float f) { return Vec2(u * f, v * f); }
+	inline t operator [](int i) { return raw[i]; }
 	template<class > friend std::ostream& operator<<(std::ostream& s,const Vec2<t>& V);
 };
 
@@ -26,10 +27,15 @@ template<class t> struct Vec3 {
 	};
 	Vec3() : u(0), v(0), w(0){}
 	Vec3(t _u,t _v,t _w) :u(_u), v(_v), w(_w) {}
-	inline Vec3<t> operator +(const Vec3<t>& V) { return Vec3(u + V.u, v + V.v, w + V.w); }
-	inline Vec3<t> operator -(const Vec3<t>& V) { return Vec3(u - V.u, v - V.v, w - V.w); }
-	inline Vec3<t> operator *(float f) { return Vec3(u * f, v * f, w * f); }
-	inline t operator *(const Vec3<t>& V) { return u * V.u + v * V.v + w * V.w; }
+	inline Vec3<t> operator ^(const Vec3<t>& v) const { return Vec3<t>(y * v.z - z * v.y, z * v.x - x * v.z, x * v.y - y * v.x); }
+	inline Vec3<t> operator +(const Vec3<t>& V) const { return Vec3(u + V.u, v + V.v, w + V.w); }
+	inline Vec3<t> operator -(const Vec3<t>& V) const { return Vec3(u - V.u, v - V.v, w - V.w); }
+	inline Vec3<t> operator *(float f) const { return Vec3(u * f, v * f, w * f); }
+	inline void normalize() {
+		t sum = std::abs(x) + std::abs(y) + std::abs(z);
+		x /= sum; y /= sum; z /= sum; 
+	}
+	inline t operator *(const Vec3<t>& V) const { return u * V.u + v * V.v + w * V.w; }
 	template<class > friend std::ostream& operator<<(std::ostream& s, const Vec3<t>& V);
 };
 #endif
