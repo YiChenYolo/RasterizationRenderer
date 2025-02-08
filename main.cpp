@@ -59,6 +59,59 @@ void draw_line(Vec2i v0, Vec2i v1, TGAImage& image, const TGAColor& color) {
 	}
 }
 
+//void draw_triangle(Vec2i v1, Vec2i v2, Vec2i v3, TGAImage& image, TGAColor color) {
+//	if (v1.y > v2.y) std::swap(v1, v2);
+//	if (v1.y > v3.y) std::swap(v1, v3);
+//	if (v2.y > v3.y) std::swap(v2, v3);
+//	float k1 = (float)(v2.x - v1.x) / (v2.y - v1.y);
+//	float k2 = (float)(v3.x - v1.x) / (v3.y - v1.y);
+//	int half_height = v2.y - v1.y;
+//	if (half_height) {
+//		for (int j = 0; j <= half_height; j++) {
+//			int left_x = v1.x + k1 * j;
+//			int right_x = v1.x + k2 * j;
+//			if (left_x > right_x) std::swap(left_x, right_x);
+//			for (int i = left_x; i < right_x; i++) {
+//				image.set(i, v1.y + j, color);
+//			}
+//		}
+//	}
+//	
+//	k1 = (float)(v2.x - v3.x)/(v2.y - v3.y);
+//	half_height = v3.y - v2.y;
+//	for (int j = 0; j < half_height; j++) {
+//		int left_x = v3.x + k1 * -j;
+//		int right_x = v3.x + k2 * -j;
+//		if (left_x > right_x) std::swap(left_x, right_x);
+//		for (int i = left_x; i < right_x; i++)
+//			image.set(i, v3.y - j, color);
+//	}
+//	
+//}
+
+void draw_triangle(Vec2i v[3], TGAImage& image, TGAColor color) {
+	Vec2i bbox[2];
+	bbox[0].x = std::min(v[0].x, std::min(v[1].x, v[2].x));
+	bbox[0].y = std::min(v[0].y, std::min(v[1].y, v[2].y));
+	bbox[1].x = std::max(v[0].x, std::max(v[1].x, v[2].x));
+	bbox[1].y = std::max(v[0].y, std::max(v[1].y, v[2].y));
+	bbox[0].x = std::max(0, bbox[0].x); bbox[0].y = std::max(0, bbox[0].y);
+	bbox[1].x = std::min(image.get_width(), bbox[1].x); bbox[1].y = std::min(image.get_height(), bbox[1].y);
+
+
+	for (int i = bbox[0].x; i <= bbox[1].x; i++) {
+		for (int j = bbox[0].y; j <= bbox[1].y; j++) {
+			float lambda1 = ((float)(v[1].y - v[2].y) * (i - v[2].x) + (v[2].x - v[1].x) * (j - v[2].y)) /
+				((v[1].y - v[2].y) * (v[0].x - v[2].x) + (v[2].x - v[1].x) * (v[0].y - v[2].y));
+			float lambda2 = ((float)(v[2].y - v[0].y) * (i - v[2].x) + (v[0].x - v[2].x) * (j - v[2].y)) /
+				((v[1].y - v[2].y) * (v[0].x - v[2].x) + (v[2].x - v[1].x) * (v[0].y - v[2].y));
+			float lambda3 = 1 - lambda1 - lambda2;
+			if (lambda1 < 0 || lambda2 < 0 || lambda3 < 0) continue;
+			image.set(i, j, color);
+		}
+	}
+}
+
 
 void draw_triangle(Vec2i pts[3], TGAImage& image, TGAColor color) {
 	Vec2i bbox[2];;
