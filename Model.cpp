@@ -3,6 +3,7 @@
 #include <fstream>
 #include <string>
 #include <sstream>
+#include <Eigen/Dense>
 
 Model::Model(const char* filename):verts_(),faces_()  {
 	std::ifstream in;
@@ -18,8 +19,9 @@ Model::Model(const char* filename):verts_(),faces_()  {
 		char trash;
 		if (!line.compare(0, 2, "v ")) {
 			iss >> trash;
-			Vec3f v;
-			iss >> v.raw[0] >> v.raw[1] >> v.raw[2];
+			Eigen::Vector4f v;
+			iss >> v(0) >> v(1) >> v(2);
+			v(3) = 1;
 			verts_.push_back(v);
 		}
 		else if (!line.compare(0, 2, "f ")) {
@@ -43,7 +45,7 @@ std::vector<int> Model::getFace(int idx) {
 	return faces_[idx];
 }
 
-Vec3f Model::getVert(int i) {
+Eigen::Vector4f Model::getVert(int i) {
 	return verts_[i];
 }
 
