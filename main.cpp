@@ -12,9 +12,9 @@ world ccordinate system: right-hand
 const int height = 800;
 const int width = 1600;
 // in world coord
-Eigen::Vector4f eye_pos(0, 0, -20, 1);
+Eigen::Vector4f eye_pos(0, 0, -2000, 1);
 Eigen::Vector4f look_dir(0, 0, -1, 0);
-Eigen::Vector4f up_dir(0, -1, 0, 0);
+Eigen::Vector4f up_dir(0, 1, 0, 0);
 const Eigen::Vector4f light_dir(0, 0, -1.0, 0);
 // in camera coord
 float Far = -50, Near = -10;
@@ -31,6 +31,7 @@ int main(int argc, char** argv) {
 	}
 	else {
 		model = new Model("./obj/african_head.obj");
+		model->load_texture("./obj/african_head_diffuse.tga");
 		//model = new Model("./obj/sllh/sllh.obj");
 	}
 

@@ -41,7 +41,6 @@ void draw_line(Eigen::Vector2i v0, Eigen::Vector2i v1, TGAImage& image, const TG
 			image.set(y, x, color);
 			x++;
 			err += derr;
-			//std::cout << err << std::endl;
 			if (err >= 0) {
 				err = err - (dx << 1);
 				y += dir;
@@ -54,7 +53,6 @@ void draw_line(Eigen::Vector2i v0, Eigen::Vector2i v1, TGAImage& image, const TG
 			image.set(x, y, color);
 			x++;
 			err += derr;
-			//std::cout << err << std::endl;
 			if (err >= 0) {
 				err = err - (dx << 1);
 				y += dir;
@@ -63,7 +61,7 @@ void draw_line(Eigen::Vector2i v0, Eigen::Vector2i v1, TGAImage& image, const TG
 	}
 }
 
-void draw_triangle(Eigen::Vector4f homo_pts[3], TGAImage& image, TGAColor color, float* zbuffer) {
+void draw_triangle(Eigen::Vector4f homo_pts[3], TGAImage& image, TGAColor colors[3], float* zbuffer) {
 	Eigen::Vector2i bbox[2];
 	Eigen::Vector3f pts[3];
 	for (int i = 0; i < 3; i++) {
@@ -86,6 +84,11 @@ void draw_triangle(Eigen::Vector4f homo_pts[3], TGAImage& image, TGAColor color,
 				float z = pts[0].z() * bary_coord.x() + pts[1].z() * bary_coord.y() + pts[2].z() * bary_coord.z();
 				if (z > zbuffer[i + j * image.get_width()]) {
 					zbuffer[i + j * image.get_width()] = z;
+					unsigned char r = colors[0].r * bary_coord.x() + colors[1].r * bary_coord.y() + colors[2].r * bary_coord.z();
+					unsigned char g = colors[0].g * bary_coord.x() + colors[1].g * bary_coord.y() + colors[2].g * bary_coord.z();
+					unsigned char b = colors[0].b * bary_coord.x() + colors[1].b * bary_coord.y() + colors[2].b * bary_coord.z();
+					unsigned char a = colors[0].a * bary_coord.x() + colors[1].a * bary_coord.y() + colors[2].a * bary_coord.z();
+					TGAColor color = TGAColor(r, g, b, a);
 					image.set(i, j, color);
 				}
 			}
@@ -94,7 +97,13 @@ void draw_triangle(Eigen::Vector4f homo_pts[3], TGAImage& image, TGAColor color,
 }
 
 Eigen::Matrix4f model_trans() {
-	return Eigen::Matrix4f::Identity();
+	Eigen::Matrix4f trans;
+	trans <<
+		100, 0, 0, 0,
+		0, 100, 0, 0,
+		0, 0, 100, 0,
+		0, 0, 0, 1;
+	return trans;
 }
 
 Eigen::Matrix4f view_trans(Eigen::Vector4f eye_pos, Eigen::Vector4f look_dir, Eigen::Vector4f up_dir) {
@@ -153,6 +162,7 @@ Eigen::Matrix4f get_viewport_matrix(int height, int width) {
 }
 
 void Renderer::rasterize(TGAImage& image,Eigen::Vector4f light_dir ,Eigen::Vector4f eye_pos, Eigen::Vector4f look_dir, Eigen::Vector4f up_dir,
+	//initialize
 	float near, float far, float fovY, float aspect) {
 	Eigen::Matrix4f mvp = get_mvp_matrix(eye_pos, look_dir, up_dir, near, far, fovY, aspect);
 	int width = image.get_width();
@@ -161,24 +171,40 @@ void Renderer::rasterize(TGAImage& image,Eigen::Vector4f light_dir ,Eigen::Vecto
 	for (int i = 0; i < width * height; i++) {
 		zbuffer[i] = -std::numeric_limits<float>::max();
 	}
+	Eigen::Matrix4f viewport = get_viewport_matrix(height, width);
+
+	//rasterize
 	for (int i = 0; i < model->nfaces(); i++) {
-		std::vector<int> f = model->getFace(i);
+		std::vector<Point> f = model->getFace(i);
 		Eigen::Vector4f world_coords[3];
 		Eigen::Vector4f coords[3];
+		//do mvp transformation
 		for (int j = 0; j < 3; j++) {
-			world_coords[j] = model->getVert(f[j]);
+			world_coords[j] = model->getVert(f[j].vert);
 			coords[j] = mvp * world_coords[j];
 		}
+		//calculate face norm
 		Eigen::Vector3f n = (world_coords[2].head<3>() - world_coords[0].head<3>())
 			.cross(world_coords[1].head<3>() - world_coords[0].head<3>());
-
 		n.normalize();
+
+		//render
 		float intensity = n.dot(light_dir.head<3>());
-		Eigen::Matrix4f viewport = get_viewport_matrix(height, width);
 		if (intensity > 0) {
-			for(int i = 0 ; i< 3 ; i++)
-				coords[i] = viewport * coords[i];
-			draw_triangle(coords, image, TGAColor(255 * intensity, 255 * intensity, 255 * intensity, 255), zbuffer);
+			//viewport transform
+			for (int i = 0; i < 3; i++) coords[i] = viewport * coords[i];
+			TGAColor colors[3];
+			for (int i = 0; i < 3; i++) colors[i] = TGAColor(255 * intensity, 255 * intensity, 255 * intensity, 255);
+			// get texture color
+			if (model->hasTexture()) {
+				TGAImage* texture = model->getTexture();
+				for (int i = 0; i < 3; i++) {
+					Eigen::Vector2f uv;
+					uv = model->getTex(f[i].tex);
+					colors[i] = texture->get(uv.x() * texture->get_width(), uv.y() * texture->get_height());
+				}
+			}
+			draw_triangle(coords, image, colors, zbuffer);
 		}
 	}
 }
