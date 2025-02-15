@@ -23,6 +23,7 @@ Model::Model(const char* filename):verts_(), texs_(), norms_(), faces_(), textur
 			iss >> v(0) >> v(1) >> v(2);
 			v(3) = 1;
 			verts_.push_back(v);
+			
 		}
 		else if (!line.compare(0, 2, "vt")) {
 			iss >> trash >> trash;
@@ -35,7 +36,7 @@ Model::Model(const char* filename):verts_(), texs_(), norms_(), faces_(), textur
 			Eigen::Vector4f norm;
 			iss >> norm(0) >> norm(1) >> norm(2);
 			norm(3) = 0;
-			norms_.push_back(norm);
+			norms_.push_back(norm.normalized());
 		}
 		else if (!line.compare(0, 2, "f ")) {
 			int norm, idx, tex;

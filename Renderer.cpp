@@ -1,5 +1,6 @@
 #include "Renderer.h"
 #include <iostream>
+#include <algorithm>
 
 const float PI = 3.1415926;
 
@@ -61,36 +62,22 @@ void draw_line(Eigen::Vector2i v0, Eigen::Vector2i v1, TGAImage& image, const TG
 	}
 }
 
-void draw_triangle(Eigen::Vector4f homo_pts[3], TGAImage& image, TGAColor colors[3], float* zbuffer) {
+void draw_triangle(Eigen::Vector2f pts[3], TGAImage& image, TGAColor color) {
 	Eigen::Vector2i bbox[2];
-	Eigen::Vector3f pts[3];
-	for (int i = 0; i < 3; i++) {
-		pts[i] = homo_pts[i].hnormalized();
-	}
 	bbox[0].x() = std::min(pts[0].x(), std::min(pts[1].x(), pts[2].x()));
 	bbox[0].y() = std::min(pts[0].y(), std::min(pts[1].y(), pts[2].y()));
 	bbox[1].x() = std::max(pts[0].x(), std::max(pts[1].x(), pts[2].x()));
 	bbox[1].y() = std::max(pts[0].y(), std::max(pts[1].y(), pts[2].y()));
-	bbox[0].x() = std::max(0, bbox[0].x()); bbox[0].y() = std::max(0, bbox[0].y());
-	bbox[1].x() = std::min(image.get_width() - 1, bbox[1].x()); bbox[1].y() = std::min(image.get_height() - 1, bbox[1].y());
+	for (int i = 0; i < 2; i++) {
+		bbox[i].x() = std::clamp(bbox[i].x(), 0, image.get_width() - 1);
+		bbox[i].y() = std::clamp(bbox[i].y(), 0, image.get_height() - 1);
+	}
 	for (int i = bbox[0].x(); i <= bbox[1].x(); i++) {
 		for (int j = bbox[0].y(); j <= bbox[1].y(); j++) {
-			Eigen::Vector2f temp_pts[3];
-			for (int i = 0; i < 3; i++) {
-				temp_pts[i] = pts[i].head<2>();
-			}
-			Eigen::Vector3f bary_coord = get_barycentric_coordinate(temp_pts, Eigen::Vector2f(i, j));
+			//TODO maybe bary_coord shouldn't compute at here, cuz it seems will change after perspective transformation
+			Eigen::Vector3f bary_coord = get_barycentric_coordinate(pts, Eigen::Vector2f(i, j));
 			if(bary_coord.x()>=0 && bary_coord.y()>=0 && bary_coord.z()>=0){
-				float z = pts[0].z() * bary_coord.x() + pts[1].z() * bary_coord.y() + pts[2].z() * bary_coord.z();
-				if (z > zbuffer[i + j * image.get_width()]) {
-					zbuffer[i + j * image.get_width()] = z;
-					unsigned char r = colors[0].r * bary_coord.x() + colors[1].r * bary_coord.y() + colors[2].r * bary_coord.z();
-					unsigned char g = colors[0].g * bary_coord.x() + colors[1].g * bary_coord.y() + colors[2].g * bary_coord.z();
-					unsigned char b = colors[0].b * bary_coord.x() + colors[1].b * bary_coord.y() + colors[2].b * bary_coord.z();
-					unsigned char a = colors[0].a * bary_coord.x() + colors[1].a * bary_coord.y() + colors[2].a * bary_coord.z();
-					TGAColor color = TGAColor(r, g, b, a);
-					image.set(i, j, color);
-				}
+				image.set(i, j, color);
 			}
 		}
 	}
@@ -99,17 +86,17 @@ void draw_triangle(Eigen::Vector4f homo_pts[3], TGAImage& image, TGAColor colors
 Eigen::Matrix4f model_trans() {
 	Eigen::Matrix4f trans;
 	trans <<
-		100, 0, 0, 0,
-		0, 100, 0, 0,
-		0, 0, 100, 0,
+		10, 0, 0, 0,
+		0, 10, 0, 0,
+		0, 0, 10, 0,
 		0, 0, 0, 1;
 	return trans;
 }
 
 Eigen::Matrix4f view_trans(Eigen::Vector4f eye_pos, Eigen::Vector4f look_dir, Eigen::Vector4f up_dir) {
 	Eigen::Matrix4f trans;
-	look_dir.normalize();
-	up_dir.normalize();
+	look_dir.head<3>().normalize();
+	up_dir.head<3>().normalize();
 	Eigen::Vector3f x = look_dir.head<3>().cross(up_dir.head<3>()).normalized();
 	trans<<
 		x.x(), x.y(), x.z(), -eye_pos.x(),
@@ -120,7 +107,6 @@ Eigen::Matrix4f view_trans(Eigen::Vector4f eye_pos, Eigen::Vector4f look_dir, Ei
 }
 
 Eigen::Matrix4f pers_trans(float near, float far, float fovY, float aspect) {
-	float d = std::abs(near);
 	float t = std::tan(fovY / 180. * PI / 2), b = -t;
 	float r = t * aspect, l = -r;
 	float f = far, n = near;
@@ -128,7 +114,7 @@ Eigen::Matrix4f pers_trans(float near, float far, float fovY, float aspect) {
 	ortho_proj <<
 		2 / (r - l), 0, 0, 0,
 		0, 2 / (t - b), 0, 0,
-		0, 0, 2 / (n - f), 0,
+		0, 0, 2 / (n - f), -(n+f)/(n-f),
 		0, 0, 0, 1;
 	Eigen::Matrix4f squish_matrix;
 	squish_matrix <<
@@ -147,6 +133,7 @@ Eigen::Matrix4f get_mvp_matrix(Eigen::Vector4f eye_pos, Eigen::Vector4f look_dir
 	Eigen::Matrix4f view = view_trans(eye_pos, look_dir, up_dir);
 	//perspective projection
 	Eigen::Matrix4f pers = pers_trans(near, far, fovY, aspect);
+	//Eigen::Matrix4f pers = Eigen::Matrix4f::Identity();
 	return pers * view * model;
 }
 
@@ -158,7 +145,6 @@ Eigen::Matrix4f get_viewport_matrix(int height, int width) {
 		0, 0, 1, 0,
 		0, 0, 0, 1;
 	return trans;
-
 }
 
 void Renderer::rasterize(TGAImage& image,Eigen::Vector4f light_dir ,Eigen::Vector4f eye_pos, Eigen::Vector4f look_dir, Eigen::Vector4f up_dir,
@@ -174,13 +160,14 @@ void Renderer::rasterize(TGAImage& image,Eigen::Vector4f light_dir ,Eigen::Vecto
 	Eigen::Matrix4f viewport = get_viewport_matrix(height, width);
 
 	//rasterize
+	//float max = -100000, min = 1000000;
 	for (int i = 0; i < model->nfaces(); i++) {
-		std::vector<Point> f = model->getFace(i);
+		std::vector<Point> face_pts = model->getFace(i);
 		Eigen::Vector4f world_coords[3];
 		Eigen::Vector4f coords[3];
 		//do mvp transformation
 		for (int j = 0; j < 3; j++) {
-			world_coords[j] = model->getVert(f[j].vert);
+			world_coords[j] = model->getVert(face_pts[j].vert);
 			coords[j] = mvp * world_coords[j];
 		}
 		//calculate face norm
@@ -192,19 +179,30 @@ void Renderer::rasterize(TGAImage& image,Eigen::Vector4f light_dir ,Eigen::Vecto
 		float intensity = n.dot(light_dir.head<3>());
 		if (intensity > 0) {
 			//viewport transform
-			for (int i = 0; i < 3; i++) coords[i] = viewport * coords[i];
 			TGAColor colors[3];
-			for (int i = 0; i < 3; i++) colors[i] = TGAColor(255 * intensity, 255 * intensity, 255 * intensity, 255);
+			for (int j = 0; j < 3; j++) colors[j] = TGAColor(255 * intensity, 255 * intensity, 255 * intensity, 255);
 			// get texture color
 			if (model->hasTexture()) {
-				TGAImage* texture = model->getTexture();
-				for (int i = 0; i < 3; i++) {
+				TGAImage texture = *model->getTexture();
+				texture.flip_vertically();
+				for (int j = 0; j < 3; j++) {
 					Eigen::Vector2f uv;
-					uv = model->getTex(f[i].tex);
-					colors[i] = texture->get(uv.x() * texture->get_width(), uv.y() * texture->get_height());
+					uv = model->getTex(face_pts[j].tex);
+					colors[j] = texture.get(uv.x() * texture.get_width(), uv.y() * texture.get_height());
 				}
 			}
-			draw_triangle(coords, image, colors, zbuffer);
+			Eigen::Vector2f screen_coords[3];
+			for (int j = 0; j < 3; j++){
+				screen_coords[j] = (viewport * (coords[j] / coords[j].w())).head<2>();
+			}
+			TGAColor color(0, 0, 0, 255);
+			for (int j = 0; j < 3; j++) {
+				color.r += colors[j].r / 3;
+				color.g += colors[j].g / 3;
+				color.b += colors[j].b / 3;
+			}
+			draw_triangle(screen_coords, image, color);
 		}
 	}
+	//std::cout << min << " " << max << std::endl;
 }
