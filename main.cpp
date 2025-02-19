@@ -24,7 +24,6 @@ float Far = -2000, Near = -100;
 const float fovY = 90.0;
 const float aspect = 16. / 9.;
 
-
 int main(int argc, char** argv) {
 	TGAImage image(width, height, TGAImage::RGB);
 	Model* model = nullptr;
@@ -38,8 +37,9 @@ int main(int argc, char** argv) {
 		//model = new Model("./obj/sllh/sllh.obj");
 	}
 
+
 	Renderer renderer(model);
-	renderer.rasterize(image, light_dir, eye_pos, look_dir, up_dir, Near, Far, fovY, aspect);
+	renderer.render(image, light_dir, eye_pos, look_dir, up_dir, Near, Far, fovY, aspect);
 	image.flip_vertically();
 	image.write_tga_file("output.tga");
 	return 0;
