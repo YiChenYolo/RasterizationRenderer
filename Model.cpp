@@ -59,6 +59,7 @@ Model::~Model() {
 void Model::load_texture(const char* model_path) {
 	texture_ = new TGAImage();
 	texture_->read_tga_file(model_path);
+	texture_->flip_vertically();
 }
 
 std::vector<Point> Model::getFace(int idx) {
@@ -69,12 +70,24 @@ Eigen::Vector4f Model::getVert(int i) {
 	return verts_[i];
 }
 
+Eigen::Vector4f Model::getVert(int iface, int ipt) {
+	return verts_[faces_[iface][ipt].vert];
+}
+
 Eigen::Vector2f Model::getTex(int i) {
 	return texs_[i];
 }
 
+Eigen::Vector2f Model::getTex(int iface, int ipt) {
+	return texs_[faces_[iface][ipt].tex];
+}
+
 Eigen::Vector4f Model::getNorm(int i) {
 	return norms_[i];
+}
+
+Eigen::Vector4f Model::getNorm(int iface, int ipt) {
+	return norms_[faces_[iface][ipt].norm];
 }
 
 size_t Model::nfaces(){

@@ -6,6 +6,7 @@ using namespace Eigen;
 const float PI = 3.1415926;
 
 
+
 void draw_line(Eigen::Vector2i v0, Eigen::Vector2i v1, TGAImage& image, const TGAColor& color) {
 	bool steep = false;
 	int x1 = v0.x(), y1 = v0.y(), x2 = v1.x(), y2 = v1.y();
@@ -117,7 +118,7 @@ Eigen::Matrix4f pers_trans(float near, float far, float fovY, float aspect) {
 	return ortho_proj * squish_matrix;
 }
 
-Eigen::Matrix4f get_mvp_matrix(Eigen::Vector4f eye_pos, Eigen::Vector4f look_dir, Eigen::Vector4f up_dir,
+Matrix4f Renderer::get_mvp_matrix(Eigen::Vector4f eye_pos, Eigen::Vector4f look_dir, Eigen::Vector4f up_dir,
 	float near, float far, float fovY, float aspect) {
 	//Model Projection
 	Matrix4f model = model_trans();
@@ -139,70 +140,68 @@ Eigen::Matrix4f get_viewport_matrix(int height, int width) {
 	return trans;
 }
 
-void raster_tri(TGAImage& image, Model *model ,TGAImage* texture, std::vector<Point> pts, float* zbuffer,Matrix4f mvp, Vector4f light_dir
-	, Vector4f eye_pos, Vector4f look_dir, Vector4f up_dir,
-	float near, float far, float fovY, float aspect) {
-	Matrix4f vp = get_viewport_matrix(image.get_height(),image.get_width());
-
-	Vector4f coords[3];
-	Vector4f coords_mvp[3];
-	Vector2f uv[3];
-	Vector2f sc[3];
-	for (int i = 0; i < 3; i++) { 
-		uv[i] = model->getTex(pts[i].tex);
-		coords[i] = model->getVert(pts[i].vert); coords[i] /= coords[i].w(); 
-		coords_mvp[i] = mvp * coords[i]; coords_mvp[i] /= coords_mvp[i].w();
-		sc[i] = (vp * coords_mvp[i]).head<2>();
-	}
-
-	Vector3f n = (coords[2].head<3>() - coords[0].head<3>())
-		.cross(coords[1].head<3>() - coords[0].head<3>());
-	n.normalize();
-	float intensity = n.dot(light_dir.head<3>());
-	if (intensity < 0) return;
-
-	Vector2i bbox[2];
+void get_bound_box(Vector2i* bbox, Vector2f sc[3], int x_max, int y_max) {
 	bbox[0].x() = std::min(sc[0].x(), std::min(sc[1].x(), sc[2].x()));
 	bbox[0].y() = std::min(sc[0].y(), std::min(sc[1].y(), sc[2].y()));
 	bbox[1].x() = std::max(sc[0].x(), std::max(sc[1].x(), sc[2].x()));
 	bbox[1].y() = std::max(sc[0].y(), std::max(sc[1].y(), sc[2].y()));
 	for (int i = 0; i < 2; i++) {
-		bbox[i].x() = std::clamp(bbox[i].x(), 0, image.get_width() - 1);
-		bbox[i].y() = std::clamp(bbox[i].y(), 0, image.get_height() - 1);
+		bbox[i].x() = std::clamp(bbox[i].x(), 0, x_max);
+		bbox[i].y() = std::clamp(bbox[i].y(), 0, y_max);
 	}
+}
+
+void GouraudShader::vertex_shader(int iface ,int ivert, Matrix4f mvp ) {
+	/*calculate the attributes of the vertex*/
+	Vector4f coord = model_->getVert(iface, ivert); coord /= coord.w();
+	clip_coords_[ivert] = mvp * coord; clip_coords_[ivert] /= clip_coords_[ivert].w();
+	uv_[ivert] = model_->getTex(iface, ivert);
+	n_[ivert] = model_->getNorm(iface, ivert);
+}
+
+bool GouraudShader::fragment_shader(int i, int j,Vector4f light_dir ,TGAColor& color) {
+	Vector3f bary_coord = Geometry::get_barycentric_coordinate(sc_, Vector2f(i, j));
+	if (bary_coord.x() < 0 || bary_coord.y() < 0 || bary_coord.z() < 0) return false;
+	
+	float z = Geometry::bary_interpolate(
+		bary_coord, std::array<float, 3>{clip_coords_[0].z(), clip_coords_[1].z(), clip_coords_[2].z()});
+	if (z < zbuffer_[i + image_->get_width() * j]) { return false; }
+
+	Vector2f tex_coord = Geometry::bary_interpolate(bary_coord, std::array<Vector2f, 3>{uv_[0], uv_[1], uv_[2]});
+	tex_coord.x() *= (model_->getTexture()->get_width() - 1); tex_coord.y() *= (model_->getTexture()->get_height() - 1);
+	color = model_->getTexture()->get((int)tex_coord.x(), (int)tex_coord.y());
+	Vector4f norm = Geometry::bary_interpolate(bary_coord, std::array<Vector4f, 3>{n_[0], n_[1], n_[2]});
+	float intensity = norm.dot(-light_dir);
+	if (intensity <= 0) return false;
+	for (int k = 0; k < 3; k++) color.raw[k] *= intensity;
+	
+	zbuffer_[i + image_->get_width() * j] = z;
+	return true;
+}
+
+void GouraudShader::raster_tri(int iface, Matrix4f mvp, Vector4f light_dir) {
+	Matrix4f vp = get_viewport_matrix(this->image_->get_height(),image_->get_width());
+
+	for (int i = 0; i < 3; i++) { 
+		vertex_shader(iface, i, mvp);
+		sc_[i] = (vp * clip_coords_[i]).head<2>();
+	}
+
+	Vector2i bbox[2];
+	get_bound_box(bbox, sc_, image_->get_width() - 1, image_->get_height() - 1);
+
 	for (int i = bbox[0].x(); i <= bbox[1].x(); i++) {
 		for (int j = bbox[0].y(); j <= bbox[1].y(); j++) {
-			Vector3f bary_coord = Geometry::get_barycentric_coordinate(sc, Vector2f(i, j));
-			if (bary_coord.x() >= 0 && bary_coord.y() >= 0 && bary_coord.z() >= 0) {
-				float z = Geometry::bary_interpolate(bary_coord, std::array<float, 3>{coords_mvp[0].z(), coords_mvp[1].z(), coords_mvp[2].z()});
-				if (z < zbuffer[i + image.get_width() * j]) {  continue; }
-				zbuffer[i + image.get_width() * j] = z;
-				Vector2f tex_coord = Geometry::bary_interpolate(bary_coord, std::array<Vector2f, 3>{uv[0], uv[1], uv[2]});
-				tex_coord.x() *= (texture->get_width()-1); tex_coord.y() *= (texture->get_height()-1);
-				TGAColor color = texture->get((int)tex_coord.x(), (int)tex_coord.y());
-				for (int k = 0; k < 3; k++) color.raw[i] *= intensity;
-				image.set(i, j, color);
-			}
+			TGAColor color;
+			if(fragment_shader(i, j, light_dir, color))
+				image_->set(i, j, color);
 		}
 	}
 }
 
-void Renderer::render(TGAImage& image,Vector4f light_dir ,Vector4f eye_pos, Vector4f look_dir,Vector4f up_dir,
-		float near, float far, float fovY, float aspect) {
-	Eigen::Matrix4f mvp = get_mvp_matrix(eye_pos, look_dir, up_dir, near, far, fovY, aspect);
-	int width = image.get_width();
-	int height = image.get_height();
-	zbuffer = new float[width * height];
-	for (int i = 0; i < width * height; i++) {
-		zbuffer[i] = -std::numeric_limits<float>::max();
-	}
-
-	TGAImage* texture = model->getTexture();
-	texture->flip_vertically();
-
-	for (int i = 0; i < model->nfaces(); i++) {
-		std::vector<Point> face_pts = model->getFace(i);
-		raster_tri(image, model,texture ,face_pts, zbuffer, mvp, light_dir
-			, eye_pos, look_dir, up_dir, near, far, fovY, aspect);
+void Renderer::render(Vector4f light_dir, Matrix4f mvp) {
+	//to triangle rasterizer
+	for (int i = 0; i < model_->nfaces(); i++) {
+		shader_.raster_tri(i, mvp, light_dir);
 	}
 }

@@ -1,6 +1,6 @@
 SYSCONF_LINK = g++
 CPPFLAGS     =
-LDFLAGS      =
+LDFLAGS      = 
 LIBS         = -lm
 
 DESTDIR = ./
@@ -11,10 +11,10 @@ OBJECTS := $(patsubst %.cpp,%.o,$(wildcard *.cpp))
 all: $(DESTDIR)$(TARGET)
 
 $(DESTDIR)$(TARGET): $(OBJECTS)
-	$(SYSCONF_LINK) -Wall $(LDFLAGS) -o $(DESTDIR)$(TARGET) $(OBJECTS) $(LIBS)
+	$(SYSCONF_LINK) -Wall $(LDFLAGS) -o $(DESTDIR)$(TARGET) $(OBJECTS) $(LIBS) $(LDFLAGS)
 
 $(OBJECTS): %.o: %.cpp
-	$(SYSCONF_LINK) -Wall $(CPPFLAGS) -c $(CFLAGS) $< -o $@
+	$(SYSCONF_LINK) -Wall $(CPPFLAGS) -c $(CFLAGS) $< -o $@ $(LDFLAGS)
 
 clean:
 	-rm -f $(OBJECTS)

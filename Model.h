@@ -31,8 +31,11 @@ public:
 	bool hasTexture();
 	TGAImage* getTexture();
 	Eigen::Vector4f getVert(int i);
+	Eigen::Vector4f getVert(int iface, int ipt);
 	Eigen::Vector2f getTex(int i);
+	Eigen::Vector2f getTex(int iface, int ipt);
 	Eigen::Vector4f getNorm(int i);
+	Eigen::Vector4f getNorm(int iface, int ipt);
 };
 #endif // __MODEL_H__
 
