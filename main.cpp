@@ -13,12 +13,12 @@ world ccordinate system: right-hand
 const int height = 900;
 const int width = 1600;
 // in world coord
-Eigen::Vector4f eye_pos(10, 10, 1000, 1);
-Eigen::Vector4f look_dir(-1, -100, -1, 0);//this doesn't work
+Eigen::Vector4f eye_pos(1.5, 2, 3, 1);
+Eigen::Vector4f look_dir(-0.5, -0.6, -1, 0);
 Eigen::Vector4f up_dir(0, 1, 0, 0);
-const Eigen::Vector4f light_dir(0, 0, -1.0, 0);
+Eigen::Vector4f light_dir(0, -0.5, -1.0, 0);
 // in camera coord
-float Far = -2000, Near = -100;
+float Far = -200, Near = -2;
 const float fovY = 90.0;
 const float aspect = 16. / 9.;
 

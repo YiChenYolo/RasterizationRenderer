@@ -78,24 +78,32 @@ void draw_triangle(Eigen::Vector2f pts[3], TGAImage& image, TGAColor color) {
 Eigen::Matrix4f model_trans() {
 	Eigen::Matrix4f trans;
 	trans <<
-		10, 0, 0, 0,
-		0, 10, 0, 0,
-		0, 0, 10, 0,
+		1, 0, 0, 0,
+		0, 1, 0, 0,
+		0, 0, 1, 0,
 		0, 0, 0, 1;
 	return trans;
 }
 
 Eigen::Matrix4f view_trans(Eigen::Vector4f eye_pos, Eigen::Vector4f look_dir, Eigen::Vector4f up_dir) {
-	Eigen::Matrix4f trans;
-	look_dir = -look_dir;// in right-hand coordinate system, look_dir is the opposite of camera z-axis
+	// Normalize input vectors (make sure they are unit vectors)
 	look_dir.head<3>().normalize();
 	up_dir.head<3>().normalize();
-	Eigen::Vector3f x = up_dir.head<3>().cross(look_dir.head<3>()).normalized();
-	trans<<
-		x.x(), x.y(), x.z(), -eye_pos.x(),
-		up_dir.x(), up_dir.y(), up_dir.z(), -eye_pos.y(),
-		look_dir.x(), look_dir.y(), look_dir.z(), -eye_pos.z(),
+
+	// Calculate right vector (perpendicular to look and up)
+	Eigen::Vector3f right = up_dir.head<3>().cross(-look_dir.head<3>()).normalized();
+
+	// Recalculate up vector to make sure all vectors are orthogonal
+	up_dir.head<3>() = -look_dir.head<3>().cross(right).normalized();
+
+	// Construct view matrix (rotation + translation)
+	Eigen::Matrix4f trans;
+	trans <<
+		right.x(), right.y(), right.z(), -eye_pos.head<3>().dot(right),
+		up_dir.x(), up_dir.y(), up_dir.z(), -eye_pos.head<3>().dot(up_dir.head<3>()),
+		-look_dir.x(), -look_dir.y(), -look_dir.z(), eye_pos.head<3>().dot(look_dir.head<3>()),
 		0, 0, 0, 1;
+
 	return trans;
 }
 
