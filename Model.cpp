@@ -4,12 +4,19 @@
 #include <string>
 #include <sstream>
 #include <Eigen/Dense>
+using namespace std;
 
-Model::Model(const char* filename):verts_(), texs_(), norms_(), faces_(), texture_(nullptr){
-	std::ifstream in;
-	in.open(filename, std::ifstream::in);
+Model::Model(string modelName, Material _mtr):verts_(), texs_(), norms_(), faces_(), mtr_(_mtr){
+	for (int i = 0; i < 5; i++)
+		textures_[i] = new TGAImage();
+
+	ifstream in;
+	string model = ".\\obj\\" + modelName + "\\" + modelName;
+	string tmp = model + ".obj";
+
+	in.open(tmp, ifstream::in);
 	if (in.fail()) {
-		std::cerr << "filed to open model file: " << filename << std::endl;
+		std::cerr << "filed to open model file: " << tmp << std::endl;
 		return;
 	}
 	std::string line;
@@ -23,7 +30,6 @@ Model::Model(const char* filename):verts_(), texs_(), norms_(), faces_(), textur
 			iss >> v(0) >> v(1) >> v(2);
 			v(3) = 1;
 			verts_.push_back(v);
-			
 		}
 		else if (!line.compare(0, 2, "vt")) {
 			iss >> trash >> trash;
@@ -50,16 +56,27 @@ Model::Model(const char* filename):verts_(), texs_(), norms_(), faces_(), textur
 	}
 	std::cerr << "# v# " << verts_.size() << " f# " << faces_.size() <<" t#"<<texs_.size()<<" n#"<<norms_.size() << std::endl;
 
+	tmp = model + "_diffuse.tga";
+	if (textures_[Diffuse]->read_tga_file(tmp.c_str())) 
+		std::cerr << "loading " << tmp << std::endl;
+	tmp = model + "_glow.tga";
+	if (textures_[Glow]->read_tga_file(tmp.c_str()))
+		std::cerr << "loading " << tmp << std::endl;
+	tmp = model + "_nm.tga";
+	if (textures_[Nm]->read_tga_file(tmp.c_str()))
+		std::cerr << "loading " << tmp << std::endl;
+	tmp = model + "_nm_tangent.tga";
+	if (textures_[NmTangent]->read_tga_file(tmp.c_str()))
+		std::cerr << "loading " << tmp << std::endl;
+	tmp = model + "_spec.tga";
+	if (textures_[Spec]->read_tga_file(tmp.c_str()))
+		std::cerr << "loading " << tmp << std::endl;
+	for (int i = 0; i < 5; i++)
+		if (textures_[i]->loaded()) textures_[i]->flip_vertically();
 }
 
 
 Model::~Model() {
-}
-
-void Model::load_texture(const char* model_path) {
-	texture_ = new TGAImage();
-	texture_->read_tga_file(model_path);
-	texture_->flip_vertically();
 }
 
 std::vector<Point> Model::getFace(int idx) {
@@ -106,10 +123,19 @@ size_t Model::nnorms() {
 	return norms_.size();
 }
 
-bool Model::hasTexture() {
-	return texture_ != nullptr;
+TGAColor Model::getDiffuse(float u, float v) {
+	return textures_[Diffuse]->get(u * textures_[Diffuse]->get_width(), v * textures_[Diffuse]->get_height());
 }
 
-TGAImage* Model::getTexture() {
-	return texture_;
+TGAColor Model::getDiffuse(Eigen::Vector2f uv) {
+	return textures_[Diffuse]->get(uv.x() * textures_[Diffuse]->get_width(), uv.y() * textures_[Diffuse]->get_height());
+}
+
+Eigen::Vector4f Model::getNm(Eigen::Vector2f uv) {
+	TGAColor tmp = textures_[Nm]->get(uv.x() * textures_[Nm]->get_width(), uv.y() * textures_[Nm]->get_height());
+	return Eigen::Vector4f(tmp.r, tmp.g, tmp.b, 0)/255.f*2.f - Eigen::Vector4f(1, 1, 1, 0);
+}
+
+TGAColor Model::getSpce(Eigen::Vector2f uv) {
+	return textures_[Spec]->get(uv.x() * textures_[Spec]->get_width(), uv.y() * textures_[Spec]->get_height());
 }

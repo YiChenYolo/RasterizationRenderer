@@ -12,24 +12,50 @@ struct Point {
 	Point(int _vert, int _tex, int _norm) :vert(_vert), tex(_tex), norm(_norm) {}
 };
 
+struct Material {
+	float kd_, ks_, ka_;
+	Material(float _kd, float _ks, float _ka) :kd_(_kd), ks_(_ks), ka_(_ka) {}
+};
+
+enum Texture {
+	Diffuse,
+	Spec,
+	Glow,
+	Nm,
+	NmTangent
+};
+
 class Model{
 private:
-	TGAImage *texture_;
+	Material mtr_;
+	TGAImage* textures_[5];
+
 	std::vector<std::vector<Point>> faces_;
 	std::vector<Eigen::Vector4f> verts_;
 	std::vector<Eigen::Vector2f> texs_;
 	std::vector<Eigen::Vector4f> norms_;
 public:
-	Model(const char* filename);
+	Model(std::string modelName,Material _mtr);
 	~Model();
 	size_t nverts();
 	size_t nfaces();
 	size_t ntexs();
 	size_t nnorms();
-	void load_texture(const char* model_path);
 	std::vector<Point> getFace(int idx);
-	bool hasTexture();
-	TGAImage* getTexture();
+	
+	TGAColor getDiffuse(float u, float v);
+	TGAColor getDiffuse(Eigen::Vector2f uv);
+	TGAColor getSpce(Eigen::Vector2f uv);
+	Eigen::Vector4f getNm(Eigen::Vector2f uv);
+	bool hasDiffuse(){ return textures_[Diffuse]->loaded(); }
+	bool hasSpec() { return textures_[Spec]->loaded(); }
+	bool hasNm() { return textures_[Nm]->loaded(); }
+	bool hasNmTangent() { return textures_[NmTangent]->loaded(); }
+	bool hasGlow() { return textures_[Glow]->loaded(); }
+
+	float getKd() { return mtr_.kd_; }
+	float getKs() { return mtr_.ks_; }
+	float getKa() { return mtr_.ka_; }
 	Eigen::Vector4f getVert(int i);
 	Eigen::Vector4f getVert(int iface, int ipt);
 	Eigen::Vector2f getTex(int i);

@@ -6,7 +6,6 @@ using namespace Eigen;
 const float PI = 3.1415926;
 
 
-
 void draw_line(Eigen::Vector2i v0, Eigen::Vector2i v1, TGAImage& image, const TGAColor& color) {
 	bool steep = false;
 	int x1 = v0.x(), y1 = v0.y(), x2 = v1.x(), y2 = v1.y();
@@ -134,7 +133,6 @@ Matrix4f Renderer::get_mvp_matrix(Eigen::Vector4f eye_pos, Eigen::Vector4f look_
 	Matrix4f view = view_trans(eye_pos, look_dir, up_dir);
 	//perspective projection
 	Matrix4f pers = pers_trans(near, far, fovY, aspect);
-	//Eigen::Matrix4f pers = Eigen::Matrix4f::Identity();
 	return pers * view * model;
 }
 
@@ -159,39 +157,61 @@ void get_bound_box(Vector2i* bbox, Vector2f sc[3], int x_max, int y_max) {
 	}
 }
 
-void GouraudShader::vertex_shader(int iface ,int ivert, Matrix4f mvp ) {
+void Shader::vertex_shader(int iface ,int ivert ) {
 	/*calculate the attributes of the vertex*/
-	Vector4f coord = model_->getVert(iface, ivert); coord /= coord.w();
-	clip_coords_[ivert] = mvp * coord; clip_coords_[ivert] /= clip_coords_[ivert].w();
+	world_coords_[ivert] = model_->getVert(iface, ivert); world_coords_[ivert] /= world_coords_[ivert].w();
+	clip_coords_[ivert] = mvp_ * world_coords_[ivert]; clip_coords_[ivert] /= clip_coords_[ivert].w();
 	uv_[ivert] = model_->getTex(iface, ivert);
 	n_[ivert] = model_->getNorm(iface, ivert);
 }
 
-bool GouraudShader::fragment_shader(int i, int j,Vector4f light_dir ,TGAColor& color) {
+
+bool Shader::fragment_shader(int i, int j,TGAColor& color, float& z) {
+	//get barycentric coordinate
 	Vector3f bary_coord = Geometry::get_barycentric_coordinate(sc_, Vector2f(i, j));
 	if (bary_coord.x() < 0 || bary_coord.y() < 0 || bary_coord.z() < 0) return false;
-	
-	float z = Geometry::bary_interpolate(
+	//zbuffer check
+	z = Geometry::bary_interpolate(
 		bary_coord, std::array<float, 3>{clip_coords_[0].z(), clip_coords_[1].z(), clip_coords_[2].z()});
 	if (z < zbuffer_[i + image_->get_width() * j]) { return false; }
-
+	//interpolate uv and normal vector
 	Vector2f tex_coord = Geometry::bary_interpolate(bary_coord, std::array<Vector2f, 3>{uv_[0], uv_[1], uv_[2]});
-	tex_coord.x() *= (model_->getTexture()->get_width() - 1); tex_coord.y() *= (model_->getTexture()->get_height() - 1);
-	color = model_->getTexture()->get((int)tex_coord.x(), (int)tex_coord.y());
-	Vector4f norm = Geometry::bary_interpolate(bary_coord, std::array<Vector4f, 3>{n_[0], n_[1], n_[2]});
-	float intensity = norm.dot(-light_dir);
-	if (intensity <= 0) return false;
-	for (int k = 0; k < 3; k++) color.raw[k] *= intensity;
+	Vector4f world_coord = Geometry::bary_interpolate(bary_coord, 
+		std::array<Vector4f, 3>{world_coords_[0], world_coords_[1], world_coords_[2]});
 	
-	zbuffer_[i + image_->get_width() * j] = z;
+	Vector4f norm;
+	if (model_->hasNm()) {
+		norm = model_->getNm(tex_coord);
+	}
+	else {
+		norm = Geometry::bary_interpolate(bary_coord, std::array<Vector4f, 3>{n_[0], n_[1], n_[2]});
+	}
+
+	//shading
+	Vector4f vert2light = (light_pos_ - world_coord).normalized();
+	Vector4f vert2eye = (eye_pos_ - world_coord).normalized();
+	float r = (light_pos_ - world_coord).norm();
+	float diffuse_intensity = model_->getKd() * (light_intensity_ / std::pow(r, 2))* std::max(norm.dot(vert2light), 0.f);
+	float ambient_intensity = model_->getKa() * light_intensity_;
+	Vector4f h = (vert2light + vert2eye).normalized();
+	float spec_intensity = model_->getKs() * (light_intensity_ / std::pow(r, 2)) * std::pow(std::max(0.f, norm.dot(h)), p_);
+	TGAColor diffuse = model_->getDiffuse(tex_coord);
+	TGAColor spec(0, 0, 0, 255);
+	if(model_->hasSpec())
+		spec = model_->getSpce(tex_coord);
+	for (int k = 0; k < 3; k++) {
+		int tmp = (ambient_intensity + diffuse_intensity) * diffuse.raw[k] + spec_intensity * spec.raw[k];
+		color.raw[k] = (unsigned char)std::clamp(tmp, 0, 255);
+	}
+
 	return true;
 }
 
-void GouraudShader::raster_tri(int iface, Matrix4f mvp, Vector4f light_dir) {
+void Shader::raster_tri(int iface) {
 	Matrix4f vp = get_viewport_matrix(this->image_->get_height(),image_->get_width());
 
 	for (int i = 0; i < 3; i++) { 
-		vertex_shader(iface, i, mvp);
+		vertex_shader(iface, i);
 		sc_[i] = (vp * clip_coords_[i]).head<2>();
 	}
 
@@ -201,15 +221,18 @@ void GouraudShader::raster_tri(int iface, Matrix4f mvp, Vector4f light_dir) {
 	for (int i = bbox[0].x(); i <= bbox[1].x(); i++) {
 		for (int j = bbox[0].y(); j <= bbox[1].y(); j++) {
 			TGAColor color;
-			if(fragment_shader(i, j, light_dir, color))
+			float z;
+			if (fragment_shader(i, j, color, z)) {
 				image_->set(i, j, color);
+				zbuffer_[i + image_->get_width() * j] = z;
+			}
 		}
 	}
 }
 
-void Renderer::render(Vector4f light_dir, Matrix4f mvp) {
+void Renderer::render() {
 	//to triangle rasterizer
 	for (int i = 0; i < model_->nfaces(); i++) {
-		shader_.raster_tri(i, mvp, light_dir);
+		shader_.raster_tri(i);
 	}
 }
