@@ -23,3 +23,76 @@ Matrix4f Geometry::rotate_y(float angle) {
 	return trans;
 }
 
+Eigen::Matrix4f Geometry::model_trans() {
+	Eigen::Matrix4f trans;
+	trans <<
+		1, 0, 0, 0,
+		0, 1, 0, 0,
+		0, 0, 1, 0,
+		0, 0, 0, 1;
+	return trans;
+}
+
+Eigen::Matrix4f Geometry::view_trans(Eigen::Vector4f eye_pos, Eigen::Vector4f gaze_at, Eigen::Vector4f up_dir) {
+	// Normalize input vectors (make sure they are unit vectors)
+	Vector4f look_dir = gaze_at - eye_pos;
+	look_dir.head<3>().normalize();
+	up_dir.head<3>().normalize();
+
+	// Calculate right vector (perpendicular to look and up)
+	Eigen::Vector3f right = up_dir.head<3>().cross(-look_dir.head<3>()).normalized();
+
+	// Recalculate up vector to make sure all vectors are orthogonal
+	up_dir.head<3>() = -look_dir.head<3>().cross(right).normalized();
+
+	// Construct view matrix (rotation + translation)
+	Eigen::Matrix4f trans;
+	trans <<
+		right.x(), right.y(), right.z(), -eye_pos.head<3>().dot(right),
+		up_dir.x(), up_dir.y(), up_dir.z(), -eye_pos.head<3>().dot(up_dir.head<3>()),
+		-look_dir.x(), -look_dir.y(), -look_dir.z(), eye_pos.head<3>().dot(look_dir.head<3>()),
+		0, 0, 0, 1;
+
+	return trans;
+}
+
+Eigen::Matrix4f Geometry::pers_trans(float near, float far, float fovY, float aspect) {
+	float t = std::tan(fovY / 180. * PI / 2), b = -t;
+	float r = t * aspect, l = -r;
+	float f = far, n = near;
+	Eigen::Matrix4f ortho_proj;
+	ortho_proj <<
+		2 / (r - l), 0, 0, 0,
+		0, 2 / (t - b), 0, 0,
+		0, 0, 2 / (n - f), -(n + f) / (n - f),
+		0, 0, 0, 1;
+	Eigen::Matrix4f squish_matrix;
+	squish_matrix <<
+		n, 0, 0, 0,
+		0, n, 0, 0,
+		0, 0, n + f, -n * f,
+		0, 0, 1, 0;
+	return ortho_proj * squish_matrix;
+}
+
+
+Matrix4f Geometry::get_mvp_matrix(Eigen::Vector4f eye_pos, Eigen::Vector4f look_dir, Eigen::Vector4f up_dir,
+	float near, float far, float fovY, float aspect) {
+	//Model Projection
+	Matrix4f model = Geometry::model_trans();
+	//view projection
+	Matrix4f view = Geometry::view_trans(eye_pos, look_dir, up_dir);
+	//perspective projection
+	Matrix4f pers = Geometry::pers_trans(near, far, fovY, aspect);
+	return pers * view * model;
+}
+
+Eigen::Matrix4f Geometry::get_viewport_matrix(int height, int width) {
+	Eigen::Matrix4f trans;
+	trans <<
+		width / 2, 0, 0, width / 2,
+		0, height / 2, 0, height / 2,
+		0, 0, 1, 0,
+		0, 0, 0, 1;
+	return trans;
+}
