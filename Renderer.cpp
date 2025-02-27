@@ -2,6 +2,8 @@
 #include <iostream>
 #include <algorithm>
 #include "geometry.h"
+#include "ShadowShader.h"
+#include "PhongShader.h"
 using namespace Eigen;
 const float PI = 3.1415926;
 
@@ -13,7 +15,7 @@ Renderer::Renderer(TGAImage* _image, Model* _model):
 	shadow_buffer_ = new float[size];
 	for (int i = 0; i < size; i++) {
 		zbuffer_[i] = -std::numeric_limits<float>::max();
-		shadow_buffer_[i] = -std::numeric_limits<float>::max();
+		shadow_buffer_[i] = std::numeric_limits<float>::max();
 	}
 }
 
@@ -30,9 +32,31 @@ void get_bound_box(Vector2i* bbox, Vector2f sc[3], int x_max, int y_max) {
 
 
 void Renderer::render() {
-	Matrix4f mvp = Geometry::get_mvp_matrix(Eye_pos, Gaze_at, Up_dir, Near, Far, FovY, Aspect);
+	//Shadow
 	Matrix4f vp = Geometry::get_viewport_matrix(Height, Width);
-	PhongShader *phong_shader = new PhongShader(vp, mvp, Light_pos, Eye_pos, Light_itensity, model_);
+	Matrix4f mvp_s = Geometry::get_mvp_matrix(Light_pos, Gaze_at, Up_dir, Near, Far, FovY, Aspect);
+	ShadowShader* shadow_shader = new ShadowShader(model_ ,vp, mvp_s, Light_pos, Light_itensity);
+	for (int iface = 0; iface < model_->nfaces(); iface++) {
+		for (int i = 0; i < 3; i++) {
+			shadow_shader->vertex(iface, i);
+		}
+		Vector2i bbox[2];
+		get_bound_box(bbox, shadow_shader->sc_, image_->get_width() - 1, image_->get_height() - 1);
+		//std::cout << bbox->transpose() << std::endl;
+		for (int i = bbox[0].x(); i <= bbox[1].x(); i++) {
+			for (int j = bbox[0].y(); j <= bbox[1].y(); j++) {
+				TGAColor color(255, 255, 255, 255);
+				float z = shadow_buffer_[i + j * image_->get_width()];
+				if (shadow_shader->fragment(i, j, color, z)) {
+					shadow_buffer_[i + image_->get_width() * j] = z;
+				}
+			}
+		}
+	}
+	//return;
+	//Phong
+	Matrix4f mvp = Geometry::get_mvp_matrix(Eye_pos, Gaze_at, Up_dir, Near, Far, FovY, Aspect);
+	PhongShader *phong_shader = new PhongShader(vp, mvp, Light_pos, Eye_pos, Light_itensity, model_, shadow_buffer_, mvp_s);
 	for (int iface = 0; iface < model_->nfaces(); iface++) {
 
 		for (int i = 0; i < 3; i++) {

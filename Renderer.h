@@ -4,7 +4,6 @@
 #include "tgaimage.h"
 #include <Eigen/Dense>
 #include "Model.h"
-#include "PhongShader.h"
 
 extern Eigen::Vector4f Eye_pos, Gaze_at, Up_dir, Light_pos;
 extern int Height, Width;

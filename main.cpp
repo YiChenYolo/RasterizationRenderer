@@ -13,12 +13,12 @@ world ccordinate system: right-hand
 
 int Height = 900;
 int Width = 1600;
-float Light_itensity = 5;
+float Light_itensity = 4;
 // in world coord
 Eigen::Vector4f Eye_pos(1, 1, 3, 1);
 Eigen::Vector4f Gaze_at(0, 0, 0, 1);
 Eigen::Vector4f Up_dir(0, 1, 0, 0);
-Eigen::Vector4f Light_pos(1, 2, 2, 1);
+Eigen::Vector4f Light_pos(1, 1.5, 2, 1);
 // in camera coord
 float Far = -200, Near = -2;
 float FovY = 90.0;

@@ -1,6 +1,10 @@
 #include "PhongShader.h"
 #include "Geometry.h"
+#include <iostream>
 using namespace Eigen;
+
+extern int Width, Height;
+
 
 void PhongShader::vertex(int iface, int ivert) {
 	/*calculate the attributes of the vertex*/
@@ -25,7 +29,7 @@ bool PhongShader::fragment(int i, int j, TGAColor& color, float& z) {
 	Vector2f tex_coord = Geometry::bary_interpolate(bary_coord, std::array<Vector2f, 3>{uv_[0], uv_[1], uv_[2]});
 	Vector4f world_coord = Geometry::bary_interpolate(bary_coord,
 		std::array<Vector4f, 3>{world_coords_[0], world_coords_[1], world_coords_[2]});
-
+	world_coord = world_coord / world_coord.w();
 	Vector4f norm;
 	if (model_->hasNm()) {
 		norm = model_->getNm(tex_coord);
@@ -35,13 +39,23 @@ bool PhongShader::fragment(int i, int j, TGAColor& color, float& z) {
 	}
 
 	//shading
-	Vector4f vert2light = (light_pos_ - world_coord).normalized();
-	Vector4f vert2eye = (eye_pos_ - world_coord).normalized();
-	float r = (light_pos_ - world_coord).norm();
-	float diffuse_intensity = model_->getKd() * (light_intensity_ / std::pow(r, 2)) * std::max(norm.dot(vert2light), 0.f);
+	world_coord /= world_coord.w();
+	light_pos_ /= light_pos_.w();
+	eye_pos_ /= light_pos_.w();
+	Vector4f vert2light = (light_pos_ - world_coord);
+	Vector4f vert2eye = (eye_pos_ - world_coord);
+	float r = vert2light.norm();
+
+	float diffuse_intensity=0, spec_intensity=0;
+	Vector4f tmp = shadow_mvp_ * world_coord; tmp /= tmp.w();
+	Vector2f shadow_coord = (vp_*tmp).head<2>();
+	//std::cout << vert2light.norm() - shadow_zbuffer_[(int)shadow_coord.x() + (int)shadow_coord.y() * Width] << std::endl;
+	if (std::abs(r - shadow_zbuffer_[(int)shadow_coord.x() + (int)shadow_coord.y() * Width]) < 0.1) {
+		diffuse_intensity = model_->getKd() * (light_intensity_ / std::pow(r, 2)) * std::max(norm.dot(vert2light), 0.f);
+		Vector4f h = (vert2light + vert2eye).normalized();
+		spec_intensity = model_->getKs() * (light_intensity_ / std::pow(r, 2)) * std::pow(std::max(0.f, norm.dot(h)), p_);
+	}
 	float ambient_intensity = model_->getKa() * light_intensity_;
-	Vector4f h = (vert2light + vert2eye).normalized();
-	float spec_intensity = model_->getKs() * (light_intensity_ / std::pow(r, 2)) * std::pow(std::max(0.f, norm.dot(h)), p_);
 	TGAColor diffuse = model_->getDiffuse(tex_coord);
 	TGAColor spec(0, 0, 0, 255);
 	if (model_->hasSpec())
