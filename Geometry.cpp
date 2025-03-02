@@ -2,6 +2,29 @@
 using namespace Eigen;
 const float PI = 3.1415926;
 
+Matrix3f Geometry::get_TBN(Model* model, int iface) {
+	Vector2f uv[3];
+	Vector4f world_coords[3];
+	for (int i = 0; i < 3; i++) {
+		uv[i] = model->getTex(iface, i);
+		world_coords[i] = model->getVert(iface, i);
+		world_coords[i] /= world_coords[i].w();
+	}
+	float deltaU1 = uv[1].x() - uv[0].x(), deltaU2 = uv[2].x() - uv[0].x();
+	float deltaV1 = uv[1].y() - uv[0].y(), deltaV2 = uv[2].y() - uv[0].y();
+	Matrix<float, 2, 3> E, TB;
+	Matrix2f deltaUV;
+	E << (world_coords[1].head<3>() - world_coords[0].head<3>()).transpose(),
+		(world_coords[2].head<3>() - world_coords[0].head<3>()).transpose();
+	deltaUV << deltaV2, -deltaV1, -deltaU2, deltaU1;
+	TB = 1.f / (deltaU1 * deltaV2 - deltaU2 * deltaV1) * deltaUV * E;
+	Vector3f T = TB.row(0).normalized(), B = TB.row(1).normalized();
+	Vector3f N = E.row(0).cross(E.row(1)).normalized();
+	Matrix3f TBN;
+	TBN << T, B, N;
+	return TBN;
+}
+
 Vector3f Geometry::get_barycentric_coordinate(Vector2f pts[3], Vector2f P) {
 	Vector3f bary_coord;
 	bary_coord(0) = ((pts[1].y() - pts[2].y()) * (P.x() - pts[2].x()) + (pts[2].x() - pts[1].x()) * (P.y() - pts[2].y())) /

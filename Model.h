@@ -4,17 +4,21 @@
 #include <Eigen/Dense>
 #include "tgaimage.h"
 
-struct Point {
-	int vert;
-	int tex;
-	int norm;
-	Point() :vert(-1), tex(-1), norm(-1) {}
-	Point(int _vert, int _tex, int _norm) :vert(_vert), tex(_tex), norm(_norm) {}
+struct Face {
+	int verts_[3];
+	int texs_[3];
+	int norms_[3];
+	Face() :verts_(), texs_(), norms_() {}
 };
 
 struct Material {
 	float kd_, ks_, ka_;
 	Material(float _kd, float _ks, float _ka) :kd_(_kd), ks_(_ks), ka_(_ka) {}
+};
+
+struct Vertex {
+	Eigen::Vector4f coord_;
+	std::vector<int> adjFaces_;
 };
 
 enum Texture {
@@ -30,8 +34,8 @@ private:
 	Material mtr_;
 	TGAImage* textures_[5];
 
-	std::vector<std::vector<Point>> faces_;
-	std::vector<Eigen::Vector4f> verts_;
+	std::vector<Face> faces_;
+	std::vector<Vertex> verts_;
 	std::vector<Eigen::Vector2f> texs_;
 	std::vector<Eigen::Vector4f> norms_;
 public:
@@ -41,12 +45,15 @@ public:
 	size_t nfaces();
 	size_t ntexs();
 	size_t nnorms();
-	std::vector<Point> getFace(int idx);
+	int nAdjFaces(int ivert);
+	Face getFace(int idx);
 	
+	int getAdjFace(int ivert, int iface);
 	TGAColor getDiffuse(float u, float v);
 	TGAColor getDiffuse(Eigen::Vector2f uv);
 	TGAColor getSpce(Eigen::Vector2f uv);
 	Eigen::Vector4f getNm(Eigen::Vector2f uv);
+	Eigen::Vector4f getTanNorm(Eigen::Vector2f uv);
 	bool hasDiffuse(){ return textures_[Diffuse]->loaded(); }
 	bool hasSpec() { return textures_[Spec]->loaded(); }
 	bool hasNm() { return textures_[Nm]->loaded(); }
@@ -56,7 +63,6 @@ public:
 	float getKd() { return mtr_.kd_; }
 	float getKs() { return mtr_.ks_; }
 	float getKa() { return mtr_.ka_; }
-	Eigen::Vector4f getVert(int i);
 	Eigen::Vector4f getVert(int iface, int ipt);
 	Eigen::Vector2f getTex(int i);
 	Eigen::Vector2f getTex(int iface, int ipt);

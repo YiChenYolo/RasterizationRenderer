@@ -13,6 +13,13 @@ void PhongShader::vertex(int iface, int ivert) {
 	uv_[ivert] = model_->getTex(iface, ivert);
 	n_[ivert] = model_->getNorm(iface, ivert);
 	sc_[ivert] = (vp_ * clip_coords_[ivert]).head<2>();
+	TBN_[ivert] = Matrix3f::Zero();
+	int i;
+	int vert = model_->getFace(iface).verts_[ivert];
+	for (i = 0; i < model_->nAdjFaces(vert); i++) {
+		TBN_[ivert] += Geometry::get_TBN(model_, model_->getAdjFace(vert, i));
+	}
+	TBN_[ivert] /= i;
 }
 
 
@@ -31,7 +38,14 @@ bool PhongShader::fragment(int i, int j, TGAColor& color, float& z) {
 		std::array<Vector4f, 3>{world_coords_[0], world_coords_[1], world_coords_[2]});
 	world_coord = world_coord / world_coord.w();
 	Vector4f norm;
-	if (model_->hasNm()) {
+	if (model_->hasNmTangent()) {
+		Matrix3f TBN = Geometry::bary_interpolate(bary_coord, std::array<Matrix3f, 3>{TBN_[0], TBN_[1], TBN_[2]});
+		norm = model_->getTanNorm(tex_coord);
+		norm = (TBN.transpose() * norm.head<3>()).homogeneous();
+		norm.w() = 0;
+		norm.normalize();
+	}
+	else if (model_->hasNm()) {
 		norm = model_->getNm(tex_coord);
 	}
 	else {

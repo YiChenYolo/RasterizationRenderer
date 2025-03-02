@@ -16,6 +16,7 @@ public:
 	Eigen::Vector2f uv_[3];
 	Eigen::Vector2f sc_[3];
 	Eigen::Matrix4f shadow_mvp_;
+	Eigen::Matrix3f TBN_[3];
 	float* shadow_zbuffer_;
 
 

@@ -29,7 +29,9 @@ Model::Model(string modelName, Material _mtr):verts_(), texs_(), norms_(), faces
 			Eigen::Vector4f v;
 			iss >> v(0) >> v(1) >> v(2);
 			v(3) = 1;
-			verts_.push_back(v);
+			Vertex vert;
+			vert.coord_ = v;
+			verts_.push_back(vert);
 		}
 		else if (!line.compare(0, 2, "vt")) {
 			iss >> trash >> trash;
@@ -47,9 +49,14 @@ Model::Model(string modelName, Material _mtr):verts_(), texs_(), norms_(), faces
 		else if (!line.compare(0, 2, "f ")) {
 			int norm, idx, tex;
 			iss >> trash;
-			std::vector<Point> f;
+			Face f;
+			int i = 0;
 			while (iss >> idx >> trash >> tex >> trash >> norm) {
-				f.push_back(Point(--idx, --tex, --norm));
+				f.verts_[i] = --idx;
+				f.texs_[i] = --tex;
+				f.norms_[i] = --norm;
+				verts_[idx].adjFaces_.push_back(faces_.size());
+				i++;
 			}
 			faces_.push_back(f);
 		}
@@ -79,16 +86,13 @@ Model::Model(string modelName, Material _mtr):verts_(), texs_(), norms_(), faces
 Model::~Model() {
 }
 
-std::vector<Point> Model::getFace(int idx) {
+Face Model::getFace(int idx) {
 	return faces_[idx];
 }
 
-Eigen::Vector4f Model::getVert(int i) {
-	return verts_[i];
-}
 
 Eigen::Vector4f Model::getVert(int iface, int ipt) {
-	return verts_[faces_[iface][ipt].vert];
+	return verts_[faces_[iface].verts_[ipt]].coord_;
 }
 
 Eigen::Vector2f Model::getTex(int i) {
@@ -96,7 +100,7 @@ Eigen::Vector2f Model::getTex(int i) {
 }
 
 Eigen::Vector2f Model::getTex(int iface, int ipt) {
-	return texs_[faces_[iface][ipt].tex];
+	return texs_[faces_[iface].texs_[ipt]];
 }
 
 Eigen::Vector4f Model::getNorm(int i) {
@@ -104,7 +108,7 @@ Eigen::Vector4f Model::getNorm(int i) {
 }
 
 Eigen::Vector4f Model::getNorm(int iface, int ipt) {
-	return norms_[faces_[iface][ipt].norm];
+	return norms_[faces_[iface].norms_[ipt]];
 }
 
 size_t Model::nfaces(){
@@ -138,4 +142,17 @@ Eigen::Vector4f Model::getNm(Eigen::Vector2f uv) {
 
 TGAColor Model::getSpce(Eigen::Vector2f uv) {
 	return textures_[Spec]->get(uv.x() * textures_[Spec]->get_width(), uv.y() * textures_[Spec]->get_height());
+}
+
+Eigen::Vector4f Model::getTanNorm(Eigen::Vector2f uv) {
+	TGAColor c = textures_[NmTangent]->get(uv.x()*textures_[NmTangent]->get_width(), uv.y()*textures_[NmTangent]->get_height());
+	return Eigen::Vector4f(c.r, c.g, c.b, 0) / 255.f * 2.f - Eigen::Vector4f(1, 1, 1, 0);
+}
+
+int Model::nAdjFaces(int ivert) {
+	return verts_[ivert].adjFaces_.size();
+}
+
+int Model::getAdjFace(int ivert, int i) {
+	return verts_[ivert].adjFaces_[i];
 }

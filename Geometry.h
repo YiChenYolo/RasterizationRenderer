@@ -1,6 +1,7 @@
 #ifndef __GEOMETRY__
 #define __GEOMETRY__
 #include<Eigen/Dense>
+#include "Model.h"
 
 class Geometry
 {
@@ -13,6 +14,7 @@ public:
 	static Eigen::Matrix4f get_mvp_matrix(Eigen::Vector4f eye_pos, Eigen::Vector4f look_dir, Eigen::Vector4f up_dir,
 		float near, float far, float fovY, float aspect);
 	static Eigen::Matrix4f get_viewport_matrix(int height, int width);
+	static Eigen::Matrix3f get_TBN(Model* model, int iface);
 	template<class T> static T bary_interpolate(Eigen::Vector3f bary_coord, const std::array<T, 3>& v) {
 		return v[0] * bary_coord[0] + v[1] * bary_coord[1] + v[2] * bary_coord[2];
 	}
